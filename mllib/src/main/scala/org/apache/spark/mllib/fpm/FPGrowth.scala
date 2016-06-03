@@ -257,15 +257,15 @@ class FPGrowth private (
    * @param partitioner partitioner used to distribute transactions
    * @return an RDD of (frequent itemset, count)
    */
-  private def genFreqItemsets[Item: ClassTag](
-      data: RDD[Array[Item]],
-      minCount: Long,
-      freqItems: Array[Item],
-      partitioner: Partitioner): RDD[FreqItemset[Item]] = {
-    val itemToRank = freqItems.zipWithIndex.toMap
-    data.flatMap { transaction =>
+  private def genFreqItemsets[Item: ClassTag]( // generate frequent items
+      data: RDD[Array[Item]], // data transactions
+      minCount: Long, //  minimum count for frequent itemsets
+      freqItems: Array[Item], // frequent items
+      partitioner: Partitioner): RDD[FreqItemset[Item]] = { // partitioner used to distribute transactions
+    val itemToRank = freqItems.zipWithIndex.toMap // zip with index about frequent items
+    data.flatMap { transaction => // flatmap items use genCondTransactions
       genCondTransactions(transaction, itemToRank, partitioner)
-    }.aggregateByKey(new FPTree[Int], partitioner.numPartitions)(
+    }.aggregateByKey(new FPTree[Int], partitioner.numPartitions)( //used to aggregate the values for each key and adds the potential to return a differnt value type
       (tree, transaction) => tree.add(transaction, 1L),
       (tree1, tree2) => tree1.merge(tree2))
     .flatMap { case (part, tree) =>
@@ -282,21 +282,21 @@ class FPGrowth private (
    * @param partitioner partitioner used to distribute transactions
    * @return a map of (target partition, conditional transaction)
    */
-  private def genCondTransactions[Item: ClassTag](
+  private def genCondTransactions[Item: ClassTag]( // generate conditional transaction
       transaction: Array[Item],
-      itemToRank: Map[Item, Int],
+      itemToRank: Map[Item, Int], // map from item to their rank
       partitioner: Partitioner): mutable.Map[Int, Array[Int]] = {
-    val output = mutable.Map.empty[Int, Array[Int]]
+    val output = mutable.Map.empty[Int, Array[Int]] // make empty Map, that can be alter
     // Filter the basket by frequent items pattern and sort their ranks.
-    val filtered = transaction.flatMap(itemToRank.get)
+    val filtered = transaction.flatMap(itemToRank.get) // sort ranks
     ju.Arrays.sort(filtered)
-    val n = filtered.length
+    val n = filtered.length // number of filtered items 
     var i = n - 1
-    while (i >= 0) {
+    while (i >= 0) { // filtering all items
       val item = filtered(i)
-      val part = partitioner.getPartition(item)
+      val part = partitioner.getPartition(item) // get filtered items to partitioner
       if (!output.contains(part)) {
-        output(part) = filtered.slice(0, i + 1)
+        output(part) = filtered.slice(0, i + 1) // get filtered items for output
       }
       i -= 1
     }
